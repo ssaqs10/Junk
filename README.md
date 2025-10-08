@@ -48,7 +48,6 @@ That will prevent `uic` (Qt’s UI compiler) from generating the menu bar at all
 
 ---
 
-## ⚙️ Step 5 — Adjust the layout in `main_window.cpp`
 
 After you remove the menu definition, the generated code will no longer create `main_ui_->menubar`.
 
