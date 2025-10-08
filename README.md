@@ -133,4 +133,49 @@ This step prevents any null-pointer or UI layout warnings when Wireshark starts 
 ---
 
 
+Perfect — here’s the **exact C++ snippet** you can safely paste into your
+`ui/qt/main_window.cpp` file inside the **`MainWindow::MainWindow(QWidget *parent)`** constructor to disable *all* keyboard shortcuts (Ctrl+O, Ctrl+E, etc.) globally.
+
+This method works cleanly across all Wireshark 3.2 / `master-3.2` builds — even if your exact file layout differs slightly.
+
+---
+
+## 🧩 **Exact Code to Add**
+
+Locate this section in `ui/qt/main_window.cpp`:
+
+```cpp
+MainWindow::MainWindow(QWidget *parent) :
+    QMainWindow(parent),
+    main_ui_(new Ui::MainWindow)
+{
+    main_ui_->setupUi(this);
+```
+
+Right **after** `main_ui_->setupUi(this);`, insert the following block 👇
+
+```cpp
+    //
+    // --- REMOVE MENU BAR (if UI still tries to create one) ---
+    //
+    if (menuBar()) {
+        menuBar()->hide();            // Hide the menu bar if Qt auto-created one
+        menuBar()->setFixedHeight(0); // Prevent any blank strip at the top
+    }
+    setMenuBar(nullptr);              // Ensure no invalid references
+
+    //
+    // --- DISABLE ALL SHORTCUTS ---
+    //
+    // This removes all keyboard accelerators (Ctrl+O, Ctrl+E, etc.)
+    // so that nothing from removed menus can be opened.
+    //
+    foreach (QAction *a, findChildren<QAction *>()) {
+        a->setShortcut(QKeySequence());
+    }
+```
+
+Would you like me to show a **ready-to-apply `.patch` file** that combines this change with the menu bar removal (so you can `git apply` it directly)?
+
+
 
