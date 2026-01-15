@@ -1,0 +1,151 @@
+
+
+---
+
+1️⃣ NMEA DPT Model (POJO)
+
+public class DptMessage {
+
+    private final String talkerId;   // e.g. SD
+    private final double depthMeters;
+    private final double offsetMeters;
+
+    public DptMessage(String talkerId, double depthMeters, double offsetMeters) {
+        this.talkerId = talkerId;
+        this.depthMeters = depthMeters;
+        this.offsetMeters = offsetMeters;
+    }
+
+    public String getTalkerId() {
+        return talkerId;
+    }
+
+    public double getDepthMeters() {
+        return depthMeters;
+    }
+
+    public double getOffsetMeters() {
+        return offsetMeters;
+    }
+
+    @Override
+    public String toString() {
+        return "DptMessage{" +
+                "talkerId='" + talkerId + '\'' +
+                ", depthMeters=" + depthMeters +
+                ", offsetMeters=" + offsetMeters +
+                '}';
+    }
+}
+
+
+---
+
+2️⃣ NMEA DPT Parser
+
+Validates checksum and converts sentence → model.
+
+public class DptParser {
+
+    public static DptMessage parse(String nmea) {
+
+        nmea = nmea.trim();
+
+        if (!nmea.startsWith("$") || !nmea.contains("*")) {
+            throw new IllegalArgumentException("Invalid NMEA format");
+        }
+
+        String[] parts = nmea.substring(1).split("\\*");
+        String body = parts[0];
+        String checksum = parts[1];
+
+        if (!checksum.equalsIgnoreCase(calculateChecksum(body))) {
+            throw new IllegalArgumentException("Checksum mismatch");
+        }
+
+        String[] fields = body.split(",");
+
+        // Example: SDDPT,12.3,0.0
+        if (!fields[0].endsWith("DPT")) {
+            throw new IllegalArgumentException("Not a DPT sentence");
+        }
+
+        String talkerId = fields[0].substring(0, 2);
+        double depth = Double.parseDouble(fields[1]);
+        double offset = Double.parseDouble(fields[2]);
+
+        return new DptMessage(talkerId, depth, offset);
+    }
+
+    private static String calculateChecksum(String sentence) {
+        int checksum = 0;
+        for (char c : sentence.toCharArray()) {
+            checksum ^= c;
+        }
+        return String.format("%02X", checksum);
+    }
+}
+
+
+---
+
+3️⃣ UDP Receiver (localhost)
+
+Listens for NMEA sentences and parses DPT messages.
+
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.nio.charset.StandardCharsets;
+
+public class NmeaUdpReceiver {
+
+    public static void main(String[] args) {
+
+        int port = 10110;
+
+        try (DatagramSocket socket = new DatagramSocket(port)) {
+            System.out.println("Listening for NMEA on UDP port " + port);
+
+            byte[] buffer = new byte[1024];
+
+            while (true) {
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                socket.receive(packet);
+
+                String received = new String(
+                        packet.getData(),
+                        0,
+                        packet.getLength(),
+                        StandardCharsets.US_ASCII
+                );
+
+                for (String line : received.split("\r\n")) {
+                    try {
+                        if (line.contains("DPT")) {
+                            DptMessage dpt = DptParser.parse(line);
+                            System.out.println("Received: " + dpt);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Invalid sentence: " + line);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+
+---
+
+4️⃣ Example End-to-End Flow
+
+Sender sends:
+
+$SDDPT,12.3,0.0*4E
+
+Receiver prints:
+
+Received: DptMessage{talkerId='SD', depthMeters=12.3, offsetMeters=0.0}
+
